@@ -167,4 +167,5 @@ with torch.no_grad():
     names = ('T-shirt/top','Trouser','Pullover','Dress','Coat','Sandal','Shirt','Sneaker','Bag','Ankle boot')
     plt.figure(figsize=(10,10))
     plot_confusion_matrix(cm,names)
-    plt.pause(10)
+    while True:
+        plt.pause(10)
