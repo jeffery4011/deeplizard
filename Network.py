@@ -12,10 +12,23 @@ from sklearn.metrics import confusion_matrix
 from plot_cm import plot_confusion_matrix
 
 import itertools
+from itertools import product
 import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 
+batch_size_list =[100,1000,10000]
+lr_list = [0.01, 0.0001, 0.00001]
+
+parameters = dict(
+    lr =[0.01, 0.0001, 0.00001],
+    batch_size = [10,100,1000,10000],
+    shuffle = [True,False]
+)
+param_values = [v for v in parameters.values()]
+
+# batch_size =100
+# lr = 0.01
 torch.set_printoptions(linewidth=120)
 
 
@@ -101,98 +114,103 @@ torch.set_grad_enabled(True)
 def get_num_correct(preds,labels):
     return preds.argmax(dim=1).eq(labels).sum().item()
 
-network = Network()
-prediction_loader = torch.utils.data.DataLoader(train_set,batch_size=10000)
-train_preds = get_all_preds(network,prediction_loader)
-print(train_preds.shape)
+for lr, batch_size,shuffle in product(*param_values):
+    network = Network()
+    prediction_loader = torch.utils.data.DataLoader(train_set,batch_size=10000)
+    train_preds = get_all_preds(network,prediction_loader)
+    print(train_preds.shape)
 
-sample = next(iter(train_set))
+    sample = next(iter(train_set))
 
-image,label =sample#image is for one picture and images are for a batch of pictures
-
-
-pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
-
-optimizer = optim.Adam(network.parameters(),lr=0.01)#lr is learning rate
-data_loader = torch.utils.data.DataLoader(
-    train_set, 
-    batch_size = 100,
-    shuffle = True
-)
-sample = next(iter(data_loader))
-
-images,labels =sample#image is for one picture and images are for a batch of pictures
+    image,label =sample#image is for one picture and images are for a batch of pictures
 
 
-pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
-tb = SummaryWriter()
-grid = torchvision.utils.make_grid(images)
-tb.add_image('images',grid)
-tb.add_graph(network,images)
+    pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
 
-for epoch in range(5):
-    total_loss = 0
-    total_correct = 0
-    for batch in data_loader:
-
-        images,labels = batch
-
-        preds = network(images)
-
-
-
-        loss = F.cross_entropy(preds,labels)
-        optimizer.zero_grad()
-        
-        loss.backward()
-        
-
-
-        
-
-        optimizer.step()#update the weights of
-
-        total_loss += loss.item()
-        total_correct += get_num_correct(preds,labels)
-    tb.add_scalar('Loss',total_loss,epoch)
-    tb.add_scalar('Number Correct',total_correct,epoch)
-    tb.add_scalar('Accuracy',total_correct/len(train_set),epoch)
-    
-    tb.add_histogram('conv1.bias',network.conv1.bias,epoch)
-    tb.add_histogram('conv1.weight',network.conv1.weight,epoch)
-    tb.add_histogram('conv1.weight.grad',network.conv1.weight.grad,epoch)
-    print("epoch:",epoch,"accuracy:",total_correct/len(train_set))
-
-with torch.no_grad():
-    prediction_loader = torch.utils.data.DataLoader(train_set, batch_size = 10000)
-    train_preds = get_all_preds(network, prediction_loader)
-    preds_correct = get_num_correct(train_preds,train_set.targets)
-    print('accuracy:',preds_correct/len(train_set))
-    stacked = torch.stack(
-        (
-            train_set.targets,
-            train_preds.argmax(dim=1)
-         )
-         ,dim = 1
+    optimizer = optim.Adam(network.parameters(),lr)#lr is learning rate
+    data_loader = torch.utils.data.DataLoader(
+        train_set, 
+        batch_size = batch_size,
+        shuffle = shuffle
     )
-    cmt = torch.zeros(10,10,dtype = torch.int32)
-    for p in stacked:
-        j,k = p.tolist()
-        cmt[j,k] = cmt[j,k]+1
-    
-    cm = confusion_matrix(train_set.targets, train_preds.argmax(dim=1))
-    print(cm)
-    
-    names = ('T-shirt/top','Trouser','Pullover','Dress','Coat','Sandal','Shirt','Sneaker','Bag','Ankle boot')
-    plt.figure(figsize=(10,10))
-    # plot_confusion_matrix(cm,names)
-    # while True
-    #     plt.pause(10)
-    
-    # tb = SummaryWriter()
+    sample = next(iter(data_loader))
 
-    # grid = torchvision.utils.make_grid(images)
+    images,labels =sample#image is for one picture and images are for a batch of pictures
 
-    # tb.add_image('images',grid)
-    # tb.add_graph(network,images)
-    tb.close()
+
+    pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
+    comment = f' batch_size={batch_size} lr = {lr}'
+    tb = SummaryWriter(comment = comment)
+    grid = torchvision.utils.make_grid(images)
+    tb.add_image('images',grid)
+    tb.add_graph(network,images)
+
+    for epoch in range(5):
+        total_loss = 0
+        total_correct = 0
+        for batch in data_loader:
+
+            images,labels = batch
+
+            preds = network(images)
+
+
+
+            loss = F.cross_entropy(preds,labels)
+            optimizer.zero_grad()
+            
+            loss.backward()
+            
+
+
+            
+
+            optimizer.step()#update the weights of
+
+            total_loss += loss.item()*batch_size
+            total_correct += get_num_correct(preds,labels)
+        tb.add_scalar('Loss',total_loss,epoch)
+        tb.add_scalar('Number Correct',total_correct,epoch)
+        tb.add_scalar('Accuracy',total_correct/len(train_set),epoch)
+        
+        # tb.add_histogram('conv1.bias',network.conv1.bias,epoch)
+        # tb.add_histogram('conv1.weight',network.conv1.weight,epoch)
+        # tb.add_histogram('conv1.weight.grad',network.conv1.weight.grad,epoch)
+        for name, weight in network.named_parameters():
+            tb.add_histogram(name,weight,epoch)
+            tb.add_histogram(f'{name}.grad',weight.grad,epoch)
+        print("epoch:",epoch,"accuracy:",total_correct/len(train_set))
+
+    # with torch.no_grad():
+    #     prediction_loader = torch.utils.data.DataLoader(train_set, batch_size = batch_size)
+    #     train_preds = get_all_preds(network, prediction_loader)
+    #     preds_correct = get_num_correct(train_preds,train_set.targets)
+    #     print('accuracy:',preds_correct/len(train_set))
+    #     stacked = torch.stack(
+    #         (
+    #             train_set.targets,
+    #             train_preds.argmax(dim=1)
+    #          )
+    #          ,dim = 1
+    #     )
+    #     cmt = torch.zeros(10,10,dtype = torch.int32)
+    #     for p in stacked:
+    #         j,k = p.tolist()
+    #         cmt[j,k] = cmt[j,k]+1
+        
+    #     cm = confusion_matrix(train_set.targets, train_preds.argmax(dim=1))
+        # print(cm)
+        
+        # names = ('T-shirt/top','Trouser','Pullover','Dress','Coat','Sandal','Shirt','Sneaker','Bag','Ankle boot')
+        # plt.figure(figsize=(10,10))
+        # plot_confusion_matrix(cm,names)
+        # while True
+        #     plt.pause(10)
+        
+        # tb = SummaryWriter()
+
+        # grid = torchvision.utils.make_grid(images)
+
+        # tb.add_image('images',grid)
+        # tb.add_graph(network,images)
+tb.close()
