@@ -14,6 +14,7 @@ from plot_cm import plot_confusion_matrix
 import itertools
 import numpy as np
 
+from torch.utils.tensorboard import SummaryWriter
 
 torch.set_printoptions(linewidth=120)
 
@@ -118,7 +119,18 @@ data_loader = torch.utils.data.DataLoader(
     batch_size = 100,
     shuffle = True
 )
-for i in range(5):
+sample = next(iter(data_loader))
+
+images,labels =sample#image is for one picture and images are for a batch of pictures
+
+
+pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
+tb = SummaryWriter()
+grid = torchvision.utils.make_grid(images)
+tb.add_image('images',grid)
+tb.add_graph(network,images)
+
+for epoch in range(5):
     total_loss = 0
     total_correct = 0
     for batch in data_loader:
@@ -142,7 +154,14 @@ for i in range(5):
 
         total_loss += loss.item()
         total_correct += get_num_correct(preds,labels)
-    print("epoch:",i,"accuracy:",total_correct/len(train_set))
+    tb.add_scalar('Loss',total_loss,epoch)
+    tb.add_scalar('Number Correct',total_correct,epoch)
+    tb.add_scalar('Accuracy',total_correct/len(train_set),epoch)
+    
+    tb.add_histogram('conv1.bias',network.conv1.bias,epoch)
+    tb.add_histogram('conv1.weight',network.conv1.weight,epoch)
+    tb.add_histogram('conv1.weight.grad',network.conv1.weight.grad,epoch)
+    print("epoch:",epoch,"accuracy:",total_correct/len(train_set))
 
 with torch.no_grad():
     prediction_loader = torch.utils.data.DataLoader(train_set, batch_size = 10000)
@@ -166,6 +185,14 @@ with torch.no_grad():
     
     names = ('T-shirt/top','Trouser','Pullover','Dress','Coat','Sandal','Shirt','Sneaker','Bag','Ankle boot')
     plt.figure(figsize=(10,10))
-    plot_confusion_matrix(cm,names)
-    while True:
-        plt.pause(10)
+    # plot_confusion_matrix(cm,names)
+    # while True
+    #     plt.pause(10)
+    
+    # tb = SummaryWriter()
+
+    # grid = torchvision.utils.make_grid(images)
+
+    # tb.add_image('images',grid)
+    # tb.add_graph(network,images)
+    tb.close()
