@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from plot_cm import plot_confusion_matrix
 
+from collections import OrderedDict
+from collections import namedtuple
 import itertools
 from itertools import product
 import numpy as np
@@ -27,10 +29,17 @@ parameters = dict(
 )
 param_values = [v for v in parameters.values()]
 
-# batch_size =100
-# lr = 0.01
-torch.set_printoptions(linewidth=120)
+params = OrderedDict(
+    lr = [.01, .001]
+    ,batch_size = [1000,10000]
+    ,shuffle = [True,False]
+)
 
+Run = namedtuple('Run',params.keys())
+torch.set_printoptions(linewidth=120)
+runs = []
+for v in product(*params.values()):
+    runs.append(Run(*v))
 
 train_set = torchvision.datasets.FashionMNIST(
     root='./data/FashionMNIST'
@@ -42,6 +51,17 @@ train_set = torchvision.datasets.FashionMNIST(
         ]
     )
 )
+
+class RunBuilder():
+    @staticmethod
+    def get_runs(params):
+
+        Run = namedtuple('Run',params.keys())
+
+        runs = []
+        for v in product(*params.values()):
+            runs.append(Run(*v))
+        return runs
 
 
 
@@ -114,7 +134,12 @@ torch.set_grad_enabled(True)
 def get_num_correct(preds,labels):
     return preds.argmax(dim=1).eq(labels).sum().item()
 
-for lr, batch_size,shuffle in product(*param_values):
+for run in RunBuilder.get_runs(params):
+    comment = f'-{run}'
+#for lr, batch_size,shuffle in product(*param_values):
+    lr = run.lr
+    shuffle = run.shuffle
+    batch_size = run.batch_size
     network = Network()
     prediction_loader = torch.utils.data.DataLoader(train_set,batch_size=10000)
     train_preds = get_all_preds(network,prediction_loader)
@@ -139,7 +164,7 @@ for lr, batch_size,shuffle in product(*param_values):
 
 
     pred = network(image.unsqueeze(0))#image shape nees to be (batch_size in_channels. height, width)
-    comment = f' batch_size={batch_size} lr = {lr}'
+    #comment = f' batch_size={batch_size} lr = {lr}'
     tb = SummaryWriter(comment = comment)
     grid = torchvision.utils.make_grid(images)
     tb.add_image('images',grid)
