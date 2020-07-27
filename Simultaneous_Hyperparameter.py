@@ -73,7 +73,10 @@ class RunBuilder():
 
 params = OrderedDict(
     lr = [.01]
-    ,batch_size =[1000,2000]
+    ,batch_size =[1000,10000,20000]
+    ,num_workers =[0,1]#,2,4,8,16]
+    ,device =['cuda','cpu']
+    #,shuffle=[True,False]
 )
 
 
@@ -108,7 +111,7 @@ class RunManager():
         grid = torchvision.utils.make_grid(images)
 
         self.tb.add_image('images', grid)
-        self.tb.add_graph(self.network, images)
+        self.tb.add_graph(self.network, images.to(getattr(run,'device','cpu')))
 
     def end_run(self):
         self.tb.close()
@@ -167,38 +170,39 @@ class RunManager():
         with open(f'{fileName}.json', 'w', encoding='utf-8') as f:
             json.dump(self.run_data, f, ensure_ascii=False, indent=4)
 
-
-m = RunManager()
-train_set = torchvision.datasets.FashionMNIST(
-    root='./data/FashionMNIST'
-    ,train =True
-    ,download=True
-    ,transform=transforms.Compose(
-        [
-            transforms.ToTensor()
-        ]
+if __name__ ==  '__main__':
+    m = RunManager()
+    train_set = torchvision.datasets.FashionMNIST(
+        root='./data/FashionMNIST'
+        ,train =True
+        ,download=True
+        ,transform=transforms.Compose(
+            [
+                transforms.ToTensor()
+            ]
+        )
     )
-)
-for run in RunBuilder.get_runs(params):
+    for run in RunBuilder.get_runs(params):
+        device = torch.device(run.device)
+        network = Network().to(device)
+        loader = DataLoader(train_set,batch_size=run.batch_size,num_workers = run.num_workers)
+        optimizer = optim.Adam(network.parameters(),lr=run.lr)
 
-    network = Network()
-    loader = DataLoader(train_set,batch_size=run.batch_size)
-    optimizer = optim.Adam(network.parameters(),lr=run.lr)
+        m.begin_run(run,network,loader)
+        for epoch in range(5):
+            m.begin_epoch()
+            for batch in loader:
 
-    m.begin_run(run,network,loader)
-    for epoch in range(5):
-        m.begin_epoch()
-        for batch in loader:
+                images =batch[0].to(device) 
+                labels =batch[1].to(device)
+                preds = network(images)
+                loss = F.cross_entropy(preds,labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-            images, labels =batch
-            preds = network(images)
-            loss = F.cross_entropy(preds,labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            m.track_loss(loss)
-            m.track_num_correct(preds,labels)
-        m.end_epoch()
-    m.end_run()
-m.save('results')
+                m.track_loss(loss)
+                m.track_num_correct(preds,labels)
+            m.end_epoch()
+        m.end_run()
+    m.save('results')
