@@ -16,6 +16,8 @@ from itertools import product
 from collections import namedtuple
 from collections import OrderedDict
 
+
+
 class Network(nn.Module):
     def __init__(self):
         super().__init__()
@@ -77,6 +79,7 @@ params = OrderedDict(
     ,num_workers =[0,1]#,2,4,8,16]
     ,device =['cuda','cpu']
     #,shuffle=[True,False]
+    ,trainset =['not_normal','normal']
 )
 
 
@@ -171,7 +174,6 @@ class RunManager():
             json.dump(self.run_data, f, ensure_ascii=False, indent=4)
 
 if __name__ ==  '__main__':
-    m = RunManager()
     train_set = torchvision.datasets.FashionMNIST(
         root='./data/FashionMNIST'
         ,train =True
@@ -179,13 +181,51 @@ if __name__ ==  '__main__':
         ,transform=transforms.Compose(
             [
                 transforms.ToTensor()
+                #normalize
+                
             ]
         )
     )
+    m = RunManager()
+    loader = DataLoader(train_set,batch_size=len(train_set),num_workers = 1)
+    data = next(iter(loader))
+    mean = data[0].mean()
+    std = data[0].std()
+    train_set = torchvision.datasets.FashionMNIST(
+        root='./data/FashionMNIST'
+        ,train =True
+        ,download=True
+        ,transform=transforms.Compose(
+            [
+                transforms.ToTensor()
+                #normalize
+                
+            ]
+        )
+    )
+    train_set_normal = torchvision.datasets.FashionMNIST(
+        root='./data/FashionMNIST'
+        ,train =True
+        ,download=True
+        ,transform=transforms.Compose(
+            [
+                transforms.ToTensor()
+                #normalize
+                ,transforms.Normalize(mean,std)
+            ]
+        )
+    )
+    trainset={
+    'not_normal':train_set
+    ,'normal':train_set_normal
+    }
     for run in RunBuilder.get_runs(params):
         device = torch.device(run.device)
         network = Network().to(device)
         loader = DataLoader(train_set,batch_size=run.batch_size,num_workers = run.num_workers)
+        data = next(iter(loader))
+        mean = data[0].mean()
+        std = data[0].std()
         optimizer = optim.Adam(network.parameters(),lr=run.lr)
 
         m.begin_run(run,network,loader)
