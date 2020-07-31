@@ -16,6 +16,22 @@ from itertools import product
 from collections import namedtuple
 from collections import OrderedDict
 
+sequential = nn.Sequential(
+      nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5)
+    , nn.ReLU()
+    , nn.MaxPool2d(kernel_size=2, stride=2)
+    ，nn.BatchNorm2d(6)
+    , nn.Conv2d(in_channels=6, out_channels=12, kernel_size=5)
+    , nn.ReLU()
+    , nn.MaxPool2d(kernel_size=2, stride=2)
+    , nn.Flatten(start_dim=1)  
+    , nn.Linear(in_features=12*4*4, out_features=120)
+    , nn.ReLU()
+    , nn.BatchNorm1d(120)
+    , nn.Linear(in_features=120, out_features=60)
+    , nn.ReLU()
+    , nn.Linear(in_features=60, out_features=10)
+)
 
 
 class Network(nn.Module):
@@ -221,7 +237,7 @@ if __name__ ==  '__main__':
     }
     for run in RunBuilder.get_runs(params):
         device = torch.device(run.device)
-        network = Network().to(device)
+        network = Network().to(device)#sequential().to(device)
         loader = DataLoader(train_set,batch_size=run.batch_size,num_workers = run.num_workers)
         data = next(iter(loader))
         mean = data[0].mean()
